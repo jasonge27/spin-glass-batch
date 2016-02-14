@@ -22,7 +22,7 @@ from blocks.bricks.cost import CategoricalCrossEntropy, MisclassificationRate
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
 from blocks.extensions.monitoring import (DataStreamMonitoring,
                                           TrainingDataMonitoring)
-#from blocks.extensions.saveload import Checkpoint
+# from blocks.extensions.saveload import Checkpoint
 from checkpoint import CheckpointBlock
 from blocks.graph import ComputationGraph
 from blocks.initialization import Constant, Uniform
@@ -131,9 +131,10 @@ class LeNet(FeedforwardSequence, Initializable):
         self.top_mlp.dims = [numpy.prod(conv_out_dim)] + self.top_mlp_dims
 
 
-def main(save_to, save_freq, um_epochs, feature_maps=None, mlp_hiddens=None,
+def main(save_to, save_freq, num_epochs, feature_maps=None, mlp_hiddens=None,
          conv_sizes=None, pool_sizes=None, batch_size=500,
          num_batches=None):
+
     if feature_maps is None:
         feature_maps = [20, 50]
     if mlp_hiddens is None:
@@ -177,7 +178,7 @@ def main(save_to, save_freq, um_epochs, feature_maps=None, mlp_hiddens=None,
     # Normalize input and apply the convnet
     probs = convnet.apply(x)
     cost = CategoricalCrossEntropy().apply(y.flatten(),
-            probs).copy(name='cost')
+                                           probs).copy(name='cost')
     error_rate = MisclassificationRate().apply(y.flatten(), probs).copy(
             name='error_rate')
 
@@ -213,7 +214,7 @@ def main(save_to, save_freq, um_epochs, feature_maps=None, mlp_hiddens=None,
                        aggregation.mean(algorithm.total_gradient_norm)],
                       prefix="train",
                       after_epoch=True),
-                  CheckpointBlock(save_to, every_n_batches=save_feq),
+                  CheckpointBlock(save_to, every_n_batches=save_freq),
                   ProgressBar(),
                   Printing()]
 
