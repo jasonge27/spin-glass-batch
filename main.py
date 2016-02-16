@@ -14,9 +14,13 @@ from argparse import ArgumentParser
 from theano import tensor
 
 from blocks.algorithms import GradientDescent, Scale
+
 from blocks.bricks import (MLP, Rectifier, Initializable, FeedforwardSequence,
                            Softmax)
-from blocks.bricks.conv import (ConvolutionalActivation, ConvolutionalSequence,
+from blocks.bricks.interfaces import Activation
+
+
+from blocks.bricks.conv import (Convolutional, ConvolutionalSequence,
                                 Flattener, MaxPooling)
 from blocks.bricks.cost import CategoricalCrossEntropy, MisclassificationRate
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
@@ -89,19 +93,19 @@ class LeNet(FeedforwardSequence, Initializable):
         conv_parameters = zip(conv_activations, filter_sizes, feature_maps)
 
         # Construct convolutional layers with corresponding parameters
-        self.layers = list(interleave([
-            (ConvolutionalActivation(filter_size=filter_size,
-                                     num_filters=num_filter,
-                                     activation=activation.apply,
-                                     step=self.conv_step,
-                                     border_mode=self.border_mode,
-                                     name='conv_{}'.format(i))
-             for i, (activation, filter_size, num_filter)
-             in enumerate(conv_parameters)),
-            (MaxPooling(size, name='pool_{}'.format(i))
-             for i, size in enumerate(pooling_sizes))]))
+        self.layers = []
+        for i, (activation, filter_size, num_filter) in enumerate(conv_parameters):
+            self.layers.extend(
+                [Convolutional(filter_size=filter_size,
+                               num_filters=num_filter,
+                               step=self.conv_step,
+                               name='conv_{}'.format(i))])
+            self.layers.extend([activation])
+        for i, size in enumerate(pooling_sizes):
+            self.layers.extend([MaxPooling(size, name='pool_{}'.format(i))])
 
         self.conv_sequence = ConvolutionalSequence(self.layers, num_channels,
+                                                   border_mode=self.border_mode,
                                                    image_size=image_shape)
 
         # Construct a top MLP
@@ -169,8 +173,12 @@ def main(save_to, save_freq, num_epochs, feature_maps=None, mlp_hiddens=None,
     logging.info("Input dim: {} {} {}".format(
         *convnet.children[0].get_dim('input_')))
     for i, layer in enumerate(convnet.layers):
-        logging.info("Layer {} ({}) dim: {} {} {}".format(
-            i, layer.__class__.__name__, *layer.get_dim('output')))
+        if (isinstance(layer, Activation)):
+            logging.info("Layer {} ({})".format(i, layer.__class__.__name__))
+        else:
+            logging.info("Layer {} ({}) dim: {} {} {}".format(
+                i, layer.__class__.__name__, *layer.get_dim('output')))
+
 
     x = tensor.tensor4('features')
     y = tensor.lmatrix('targets')
@@ -232,20 +240,27 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     parser = ArgumentParser("An example of training a convolutional network "
                             "on the MNIST dataset.")
+
     parser.add_argument("--num-epochs", type=int, default=2,
                         help="Number of training epochs to do.")
+
     parser.add_argument("save_to", default="mnist.pkl", nargs="?",
                         help="Destination to save the state of the training "
                              "process.")
-    parser.add_argument("save_feq", default=5, nargs="?",
+
+    parser.add_argument("save_freq", default=5, nargs="?",
                         help="Checkpoint frequency")
+
     parser.add_argument("--feature-maps", type=int, nargs='+',
                         default=[20, 50], help="List of feature maps numbers.")
+
     parser.add_argument("--mlp-hiddens", type=int, nargs='+', default=[500],
                         help="List of numbers of hidden units for the MLP.")
+
     parser.add_argument("--conv-sizes", type=int, nargs='+', default=[5, 5],
                         help="Convolutional kernels sizes. The kernels are "
                         "always square.")
+
     parser.add_argument("--pool-sizes", type=int, nargs='+', default=[2, 2],
                         help="Pooling sizes. The pooling windows are always "
                              "square. Should be the same length as "
